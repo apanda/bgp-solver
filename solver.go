@@ -203,10 +203,11 @@ func main() {
     fmt.Printf("Reading JSON\n")
     topo := JsonTopoToTopo(topology.ParseJsonTopology(topoFile))
     fmt.Printf("Done reading JSON\n")
-    pb := progress.StartNew(len(topo.AdjacencyMatrix))
+    fmt.Printf("Starting progress bar\n")
+    pb := progress.StartNew(len(topo.AdjacencyMatrix) + 1)
     for dest := range topo.AdjacencyMatrix {
-        topo.ComputeNextHops(dest)
         pb.Increment()
+        topo.ComputeNextHops(dest)
     }
     pb.FinishPrint("Done computing nexthop\n")
     //topo.PrintNextHop()

@@ -289,6 +289,7 @@ func main() {
             chFail[node1] = make(chan map[int64] int, 1)
             go func(n0 int64, n1 int64) {
                 out := topo.LinkFailEffect(node0, node1)
+                fmt.Printf("Computed something\n")
                 chFail[n1] <- out
             } (node0, node1)
         }

@@ -6,6 +6,7 @@ import (
         "strconv"
         "flag"
         "sort"
+        "runtime"
          topology "github.com/apanda/smpc/topology"
         )
 type Topology struct {
@@ -238,13 +239,22 @@ func main() {
         flag.Usage()
         os.Exit(1)        
     }
+    runtime.GOMAXPROCS(runtime.NumCPU())
     fmt.Printf("Reading JSON\n")
     topo := JsonTopoToTopo(topology.ParseJsonTopology(topoFile))
     fmt.Printf("Done reading JSON\n")
     fmt.Printf("Starting next hop computation\n")
     count := 0
+    ch := make(map[int64] chan bool, len(topo.AdjacencyMatrix))
     for dest := range topo.AdjacencyMatrix {
-        topo.ComputeNextHops(dest)
+        ch[dest] = make(chan bool, 1)
+        go func(d int64) {
+            topo.ComputeNextHops(d)
+            ch[d] <- true
+        }(dest)
+    }
+    for idx := range ch {
+        <- ch[idx]
         count ++
         fmt.Printf("Done %d/%d\n", count, len(topo.AdjacencyMatrix))
     }
@@ -273,12 +283,24 @@ func main() {
     count = 0
     fmt.Printf("Starting the main course\n")
     for node0 := range topo.AdjacencyMatrix {
+        chFail := make(map[int64] chan map[int64] int, len(topo.AdjacencyMatrix[node0]))
         for idx := range topo.AdjacencyMatrix[node0] {
             node1 := topo.AdjacencyMatrix[node0][idx]
             if node1 == node0 {
                 continue
             }
-            out := topo.LinkFailEffect(node0, node1)
+            chFail[node1] = make(chan map[int64] int, 1)
+            go func(n0 int64, n1 int64) {
+                out := topo.LinkFailEffect(node0, node1)
+                chFail[n1] <- out
+            } (node0, node1)
+        }
+        for idx := range topo.AdjacencyMatrix[node0] {
+            node1 := topo.AdjacencyMatrix[node0][idx]
+            if node1 == node0 {
+                continue
+            }
+            out := <- chFail[node1]
             bufOf.WriteString(fmt.Sprintf("%d %d", node0, node1))
             for didx := range dests {
                 bufOf.WriteString(fmt.Sprintf("%d ", out[dests[didx]]))

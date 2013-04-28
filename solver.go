@@ -141,6 +141,7 @@ func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) (map[int64] int)
                             fmt.Printf("%d ", path[idx])
                         }
                         fmt.Printf("\n")
+                        topo.PrintNextHop()
                         os.Exit(1)
                     }
                     visited[current] = true

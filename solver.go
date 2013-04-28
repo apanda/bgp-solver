@@ -239,6 +239,7 @@ func main() {
         flag.Usage()
         os.Exit(1)        
     }
+    fmt.Printf("Num CPU = %d\n", runtime.NumCPU())
     runtime.GOMAXPROCS(runtime.NumCPU())
     fmt.Printf("Reading JSON\n")
     topo := JsonTopoToTopo(topology.ParseJsonTopology(topoFile))

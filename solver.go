@@ -316,6 +316,7 @@ func main() {
             if node1 == node0 {
                 continue
             }
+            fmt.Printf("Waiting for %d %d\n", node0, node1)
             out := <- chFail[node1]
             bufOf.WriteString(fmt.Sprintf("%d %d", node0, node1))
             for didx := range dests {

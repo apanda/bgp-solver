@@ -204,9 +204,6 @@ func (topo *Topology) ComputeNextHopsInternal (nhop map[int64] int64) (map[int64
     return nhop
 }
 
-func (topo *Topology) ComputeNextHops (dest int64) {
-    topo.NextHop[dest] = topo.ComputeNextHopsInternal (topo.NextHop[dest])
-}
 
 func (topo *Topology) PrintNextHop () {
     for i := range topo.NextHop {
@@ -246,16 +243,15 @@ func main() {
     fmt.Printf("Done reading JSON\n")
     fmt.Printf("Starting next hop computation\n")
     count := 0
-    ch := make(map[int64] chan bool, len(topo.AdjacencyMatrix))
+    ch := make(map[int64] chan map[int64] int64, len(topo.AdjacencyMatrix))
     for dest := range topo.AdjacencyMatrix {
-        ch[dest] = make(chan bool, 1)
-        go func(d int64) {
-            topo.ComputeNextHops(d)
-            ch[d] <- true
-        }(dest)
+        ch[dest] = make(chan map[int64] int64, 1)
+        go func(d int64, nhop map[int64] int64) {
+            ch[d] <- topo.ComputeNextHopsInternal (nhop)
+        }(dest, topo.NextHop[dest])
     }
     for idx := range ch {
-        <- ch[idx]
+        topo.NextHop[idx] =  <- ch[idx]
         count ++
         fmt.Printf("Done %d/%d\n", count, len(topo.AdjacencyMatrix))
     }
@@ -313,4 +309,3 @@ func main() {
         bufOf.Flush()
     }
 }
-

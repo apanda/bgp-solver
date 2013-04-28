@@ -8,35 +8,39 @@ import (
         "sort"
         "runtime"
          topology "github.com/apanda/smpc/topology"
+         "runtime/pprof"
         )
 type Topology struct {
     Nodes int
+    NodeList []int64
     // Map from node to other connected nodes
     // Node -> link -> node (links are ordered i.e. 0, 1, 2, 3...)
     AdjacencyMatrix map[int64] []int64
     // Node -> node -> link
-    NodeToPortMap map[int64] map[int64] int64
+    NodeToPortMap  [][] int64
     PortToNodeMap map[int64] map[int64] int64
     // Node -> int -> int -> bool
     // Node -> rank -> index -> bool (says whether for a node, rank x is link y)
     // For node is rank 0 index foo
-    IndicesLink map[int64] []int64
-    IndicesNode map[int64] []int64
-    Exports map[int64] [][]int64
-    NextHop map[int64] map[int64] int64
+    IndicesLink [][]int64
+    IndicesNode [][]int64
+    Exports [][][]int64
+    NextHop [][]int64
 }
 func (topo *Topology) InitTopology (nodes int) {
     topo.AdjacencyMatrix = make(map[int64] []int64, nodes)
-    topo.NodeToPortMap = make(map[int64] map[int64] int64, nodes)
+    topo.NodeToPortMap = make([][]int64, nodes + 1)
     topo.PortToNodeMap = make(map[int64] map[int64] int64, nodes)
-    topo.IndicesLink = make(map[int64] []int64, nodes)
-    topo.IndicesNode = make(map[int64] []int64, nodes)
-    topo.Exports = make(map[int64] [][]int64, nodes)
-    topo.NextHop = make(map[int64] map[int64] int64, nodes)
+    topo.IndicesLink = make([][]int64, nodes + 1)
+    topo.IndicesNode = make([][]int64, nodes + 1)
+    topo.Exports = make([][][]int64, nodes + 1)
+    topo.NextHop = make([][] int64, nodes + 1)
+    topo.NodeList = make([]int64, nodes)
     topo.Nodes = nodes
+
     for i := int64(0); i < int64(nodes); i++ {
         topo.PortToNodeMap[i + 1] = make(map[int64] int64, nodes)
-        topo.NodeToPortMap[i + 1] = make(map[int64] int64, nodes)
+        topo.NodeToPortMap[i + 1] = make([]int64, nodes + 1)
 
     }
 }
@@ -45,10 +49,13 @@ func JsonTopoToTopo(json *topology.JsonTopology) (*Topology) {
     topo := &Topology{}
     nodes := len(json.AdjacencyMatrix)
     topo.InitTopology (nodes)
+    count := 0
     for node := range json.AdjacencyMatrix {
         nint32, _  := strconv.Atoi(node)
         nint :=  int64(nint32)
         topo.AdjacencyMatrix[nint] = json.AdjacencyMatrix[node]
+        topo.NodeList[count] = nint
+        count += 1
     }
     for node := range json.PortToNodeMap {
         nint32, _  := strconv.Atoi(node)
@@ -64,7 +71,7 @@ func JsonTopoToTopo(json *topology.JsonTopology) (*Topology) {
         for onode := range json.NodeToPortMap[node] {
             onint32, _ := strconv.Atoi(onode)
             onodeint := int64(onint32)
-            topo.NodeToPortMap[nint][onodeint] = json.NodeToPortMap[node][onode]
+            topo.NodeToPortMap[int(nint)][int(onodeint)] = json.NodeToPortMap[node][onode]
         }
     }
 
@@ -81,7 +88,7 @@ func JsonTopoToTopo(json *topology.JsonTopology) (*Topology) {
         topo.IndicesNode[nint] = json.IndicesNode[node]
     }
     for node := range topo.AdjacencyMatrix {
-        topo.NextHop[node] = make(map[int64] int64, nodes)
+        topo.NextHop[node] = make([]int64, nodes + 1)
         for node2 := range topo.AdjacencyMatrix {
             if node2 == node {
                 topo.NextHop[node][node2] = node2
@@ -95,7 +102,8 @@ func JsonTopoToTopo(json *topology.JsonTopology) (*Topology) {
 
 func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) (map[int64] int) {
     node0Result := make(map[int64] int, topo.Nodes)
-    for dest := range topo.NextHop {
+    for destIdx := range topo.NodeList {
+        dest := topo.NodeList[destIdx]
         if dest == node0 {
             continue
         }
@@ -117,7 +125,7 @@ func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) (map[int64] int)
                 pathLength := 0
                 prev := int64(0)
                 //fmt.Printf("Simulating (%d %d failed, dest %d)\n", node0, node1, dest)
-                visited := make(map[int64] bool, topo.Nodes)
+                visited := make([]bool, topo.Nodes + 1)
                 path := make([]int64, topo.Nodes)
                 path[pathLength] = node0
                 pathLength += 1
@@ -153,16 +161,16 @@ func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) (map[int64] int)
     return node0Result
 }
 
-func (topo *Topology) GetCurrentNextHopWithFail (node int64, nhop map[int64] int64, disallow int64) (int64) {
+func (topo *Topology) GetCurrentNextHopWithFail (node int64, nhop []int64, disallow int64) (int64) {
     // Go through neighbors in preference order
     for nbrIdx := range topo.IndicesNode[node] {
         nbr := topo.IndicesNode[node][nbrIdx]
         if nbr == disallow {
             continue
         }
-        nbrLink := topo.NodeToPortMap[nbr][node]
+        nbrLink := topo.NodeToPortMap[int(nbr)][int(node)]
         nbrNhop := nhop[nbr]
-        nbrNhopLink := topo.NodeToPortMap[nbr][nbrNhop]
+        nbrNhopLink := topo.NodeToPortMap[int(nbr)][int(nbrNhop)]
         export := topo.Exports[nbr][nbrLink][nbrNhopLink]
         if export * nbrNhop != 0 {
             return nbr
@@ -171,14 +179,15 @@ func (topo *Topology) GetCurrentNextHopWithFail (node int64, nhop map[int64] int
     return 0
 }
 
-func (topo *Topology) ComputeNextHopsWithFail (nhop map[int64] int64, src int64, disallow int64) (map[int64] int64) {
+func (topo *Topology) ComputeNextHopsWithFail (nhop []int64, src int64, disallow int64) ([]int64) {
     converged := false
     steps := 0
     for !converged {
-        nhopTable := make(map[int64] int64, topo.Nodes)
+        nhopTable := make([]int64, topo.Nodes + 1)
         converged = true
         steps++
-        for node := range topo.AdjacencyMatrix {
+        for nodeIdx := range topo.NodeList {
+            node := topo.NodeList[nodeIdx]
             if node == src {
                 nhopTable[node] = topo.GetCurrentNextHopWithFail(node,  nhop, disallow)
             } else {
@@ -198,13 +207,13 @@ func (topo *Topology) ComputeNextHopsWithFail (nhop map[int64] int64, src int64,
     return nhop
 }
 
-func (topo *Topology) GetCurrentNextHop (node int64, nhop map[int64] int64) (int64){
+func (topo *Topology) GetCurrentNextHop (node int64, nhop []int64) (int64){
     // Go through neighbors in preference order
     for nbrIdx := range topo.IndicesNode[node] {
         nbr := topo.IndicesNode[node][nbrIdx]
-        nbrLink := topo.NodeToPortMap[nbr][node]
+        nbrLink := topo.NodeToPortMap[int(nbr)][int(node)]
         nbrNhop := nhop[nbr]
-        nbrNhopLink := topo.NodeToPortMap[nbr][nbrNhop]
+        nbrNhopLink := topo.NodeToPortMap[int(nbr)][int(nbrNhop)]
         export := topo.Exports[nbr][nbrLink][nbrNhopLink]
         if export * nbrNhop != 0 {
             return nbr
@@ -213,12 +222,13 @@ func (topo *Topology) GetCurrentNextHop (node int64, nhop map[int64] int64) (int
     return 0
 }
 
-func (topo *Topology) ComputeNextHopsInternal (nhop map[int64] int64) (map[int64] int64) {
+func (topo *Topology) ComputeNextHopsInternal (nhop []int64) ([]int64) {
     converged := false
-    nhopTable := make(map[int64] int64, topo.Nodes)
+    nhopTable := make([]int64, topo.Nodes + 1)
     for !converged {
         converged = true
-        for node := range topo.AdjacencyMatrix {
+        for nodeIdx := range topo.NodeList {
+            node := topo.NodeList[nodeIdx]
             nhopTable[node] = topo.GetCurrentNextHop(node, nhop)
             converged = converged && (nhopTable[node] == nhop[node])
         }
@@ -254,10 +264,20 @@ func (a int64arr) Less(i, j int) bool {
 func main() {
     topoFile := flag.String("topology", "", "Topology (json file) to use")
     outFile := flag.String("out", "", "Output file")
+    cpuprof := flag.String("cpuprofile", "", "write cpu profile")
     flag.Parse()
     if *topoFile == "" || topoFile == nil || outFile == nil || *outFile == "" {
         flag.Usage()
         os.Exit(1)        
+    }
+    if *cpuprof != "" {
+        f, err := os.Create(*cpuprof)
+        if err != nil {
+            fmt.Printf("Error: %v\n", err)
+            os.Exit(1)
+        }
+        pprof.StartCPUProfile(f)
+        defer pprof.StopCPUProfile()
     }
     fmt.Printf("Num CPU = %d\n", runtime.NumCPU())
     runtime.GOMAXPROCS(runtime.NumCPU())
@@ -266,17 +286,18 @@ func main() {
     fmt.Printf("Done reading JSON\n")
     fmt.Printf("Starting next hop computation\n")
     count := 0
-    ch := make(map[int64] chan map[int64] int64, len(topo.AdjacencyMatrix))
-    for dest := range topo.AdjacencyMatrix {
-        ch[dest] = make(chan map[int64] int64, 1)
-        go func(d int64, nhop map[int64] int64) {
-            ch[d] <- topo.ComputeNextHopsInternal (nhop)
-        }(dest, topo.NextHop[dest])
+    ch := make(map[int64] chan []int64, topo.Nodes)
+    for destIdx := range topo.NodeList {
+        dest := topo.NodeList[destIdx]
+        ch[dest] = make(chan []int64, 1)
+        go func(d int64, nhop []int64, ch chan []int64) {
+            ch <- topo.ComputeNextHopsInternal (nhop)
+        }(dest, topo.NextHop[dest], ch[dest])
     }
     for idx := range ch {
         topo.NextHop[idx] =  <- ch[idx]
         count ++
-        fmt.Printf("Done %d/%d\n", count, len(topo.AdjacencyMatrix))
+        fmt.Printf("Done %d/%d\n", count, topo.Nodes)
     }
     //topo.PrintNextHop()
     of, err := os.Create(*outFile)
@@ -302,28 +323,28 @@ func main() {
     bufOf.Flush()
     count = 0
     fmt.Printf("Starting the main course\n")
-    for node0 := range topo.AdjacencyMatrix {
-        chFail := make(map[int64] chan map[int64] int, len(topo.AdjacencyMatrix[node0]))
+    chFail := make(map[int64] map[int64] chan map[int64] int, topo.Nodes)
+    for node0Idx := range topo.NodeList {
+        node0 := topo.NodeList[node0Idx]
+        chFail[node0] = make(map[int64] chan map[int64] int, len(topo.AdjacencyMatrix[node0]))
         for idx := range topo.AdjacencyMatrix[node0] {
             node1 := topo.AdjacencyMatrix[node0][idx]
             if node1 == node0 {
                 continue
             }
-            chFail[node1] = make(chan map[int64] int, 1)
-            go func(n0 int64, n1 int64) {
+            chFail[node0][node1] = make(chan map[int64] int, 1)
+            go func(n0 int64, n1 int64, ch chan map[int64] int) {
                 fmt.Printf("Starting computation %d %d\n", n0, n1)
                 out := topo.LinkFailEffect(node0, node1)
                 fmt.Printf("Computed failure of %d %d\n", n0, n1)
-                chFail[n1] <- out
-            } (node0, node1)
+                ch <- out
+            } (node0, node1, chFail[node0][node1])
         }
-        for idx := range topo.AdjacencyMatrix[node0] {
-            node1 := topo.AdjacencyMatrix[node0][idx]
-            if node1 == node0 {
-                continue
-            }
+    }
+    for node0 := range chFail { 
+        for node1 := range chFail[node0] {
             fmt.Printf("Waiting for %d %d\n", node0, node1)
-            out := <- chFail[node1]
+            out := <- chFail[node0][node1]
             bufOf.WriteString(fmt.Sprintf("%d %d", node0, node1))
             for didx := range dests {
                 bufOf.WriteString(fmt.Sprintf("%d ", out[dests[didx]]))

@@ -103,10 +103,10 @@ func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) (map[int64] int)
              //fmt.Printf("Failed %d %d, path to %d unaffected\n", node0, node1, dest)
             node0Result[dest] = 1
         } else {
-            fmt.Printf("Computing next hops\n")
+            //fmt.Printf("Computing next hops\n")
             nhops := topo.ComputeNextHopsWithFail(topo.NextHop[dest], node0, node1)
             nhop := nhops[node0] // Correct next hop for failure
-            fmt.Printf("Done computing next hop\n")
+            //fmt.Printf("Done computing next hop\n")
             if nhop == 0 || topo.NextHop[dest][nhop] == node0 { //Case 3
                 // fmt.Printf("Failed %d %d, path to %d instaloops (%d)\n", node0, node1, dest, nhop)
                 //fmt.Printf("Case 3 (instant loop), fail %d %d, dest %d nhop %d\n", node0, node1, dest, nhop)

@@ -176,7 +176,7 @@ func (topo *Topology) ComputeNextHopsWithFail (nhop map[int64] int64, src int64,
         }
         nhop = nhopTable
     }
-    fmt.Printf("Convergence after failurer took %d steps\n")
+    fmt.Printf("Convergence after failurer took %d steps\n", steps)
     return nhop
 }
 

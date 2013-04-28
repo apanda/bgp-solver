@@ -141,7 +141,6 @@ func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) (map[int64] int)
                             fmt.Printf("%d ", path[idx])
                         }
                         fmt.Printf("\n")
-                        topo.PrintNextHop()
                         os.Exit(1)
                     }
                     visited[current] = true
@@ -285,7 +284,7 @@ func main() {
         count ++
         fmt.Printf("Done %d/%d\n", count, len(topo.AdjacencyMatrix))
     }
-    //topo.PrintNextHop()
+    topo.PrintNextHop()
     of, err := os.Create(*outFile)
     defer of.Close()
     bufOf := bufio.NewWriter(of)

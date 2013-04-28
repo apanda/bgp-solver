@@ -118,6 +118,8 @@ func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) (map[int64] int)
                 prev := int64(0)
                 //fmt.Printf("Simulating (%d %d failed, dest %d)\n", node0, node1, dest)
                 visited := make(map[int64] bool, topo.Nodes)
+                path := make(map[int64] bool, topo.Nodes)
+                path[pathLength++] = node0
                 for ((current != dest) && (current != node0)) {
                     prev = current
                     current = topo.NextHop[dest][current]
@@ -126,12 +128,17 @@ func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) (map[int64] int)
                         fmt.Printf("Weird loop, dying\n")
                         os.Exit(1)
                     }
+                    
+                    path[pathLength ++] = current
                     if visited[current] {
-                        fmt.Printf("Hmm loop\n")
-                        break
+                        fmt.Printf("Hmm loop\nPath: ")
+                        for idx := 0; idx < pathLength; idx++ {
+                            fmt.Printf("%d ", path[idx])
+                        }
+                        fmt.Printf("\n")
+                        os.Exit(1)
                     }
                     visited[current] = true
-                    pathLength += 1
                 }
                 //fmt.Printf("Path length of %d\n", pathLength)
                 if (current == dest) { // Case 2

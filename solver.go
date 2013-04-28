@@ -118,7 +118,7 @@ func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) (map[int64] int)
                 prev := int64(0)
                 //fmt.Printf("Simulating (%d %d failed, dest %d)\n", node0, node1, dest)
                 visited := make(map[int64] bool, topo.Nodes)
-                path := make(map[int64] bool, topo.Nodes)
+                path := make([]int64, topo.Nodes)
                 path[pathLength] = node0
                 pathLength += 1
                 for ((current != dest) && (current != node0)) {

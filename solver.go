@@ -5,8 +5,8 @@ import (
         "fmt"
         "strconv"
         "flag"
+        "sort"
          topology "github.com/apanda/smpc/topology"
-         progress "github.com/cheggaaa/pb"
         )
 type Topology struct {
     Nodes int
@@ -92,21 +92,22 @@ func JsonTopoToTopo(json *topology.JsonTopology) (*Topology) {
     return topo
 }
 
-func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) ([]int64) {
-    node0Result := make([]int64, 4)
+func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) (map[int64] int) {
+    node0Result := make(map[int64] int, topo.Nodes)
     for dest := range topo.NextHop {
         if dest == node0 {
             continue
         }
         if topo.NextHop[dest][node0] != node1 { //Case 1
             // fmt.Printf("Failed %d %d, path to %d unaffected\n", node0, node1, dest)
-            node0Result[0] += 1
+            node0Result[dest] = 1
         } else {
-            nhop := topo.GetCurrentNextHopWithFail (node0, dest, node1)
+            nhops := topo.ComputeNextHopsWithFail(topo.NextHop[dest], node0, node1)
+            nhop := nhops[node0] // Correct next hop for failure
             if nhop == 0 || topo.NextHop[dest][nhop] == node0 { //Case 3
                 // fmt.Printf("Failed %d %d, path to %d instaloops (%d)\n", node0, node1, dest, nhop)
                 //fmt.Printf("Case 3 (instant loop), fail %d %d, dest %d nhop %d\n", node0, node1, dest, nhop)
-                node0Result[2] += 1
+                node0Result[dest] = 3
             } else {
                 // Simulate path 
                 current := nhop
@@ -126,10 +127,10 @@ func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) ([]int64) {
                 //fmt.Printf("Path length of %d\n", pathLength)
                 if (current == dest) { // Case 2
                     // fmt.Printf("Failed %d %d, path to %d changes but gets to dest in %d\n", node0, node1, dest, pathLength)
-                    node0Result[1] += 1
+                    node0Result[dest] = 2
                 } else { // Case 4
                     // fmt.Printf("Failed %d %d, path to %d changes and loops\n", node0, node1, dest)
-                    node0Result[3] += 1
+                    node0Result[dest] = 4
                 }
             }
         }
@@ -137,7 +138,7 @@ func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) ([]int64) {
     return node0Result
 }
 
-func (topo *Topology) GetCurrentNextHopWithFail (node int64, dest int64, disallow int64) (int64) {
+func (topo *Topology) GetCurrentNextHopWithFail (node int64, nhop map[int64] int64, disallow int64) (int64) {
     // Go through neighbors in preference order
     for nbrIdx := range topo.IndicesNode[node] {
         nbr := topo.IndicesNode[node][nbrIdx]
@@ -145,7 +146,7 @@ func (topo *Topology) GetCurrentNextHopWithFail (node int64, dest int64, disallo
             continue
         }
         nbrLink := topo.NodeToPortMap[nbr][node]
-        nbrNhop := topo.NextHop[dest][nbr]
+        nbrNhop := nhop[nbr]
         nbrNhopLink := topo.NodeToPortMap[nbr][nbrNhop]
         export := topo.Exports[nbr][nbrLink][nbrNhopLink]
         if export * nbrNhop != 0 {
@@ -155,33 +156,57 @@ func (topo *Topology) GetCurrentNextHopWithFail (node int64, dest int64, disallo
     return 0
 }
 
-func (topo *Topology) GetCurrentNextHop (node int64, dest int64) (int64){
-    // Go through neighbors in preference order
-    for nbrIdx := range topo.IndicesNode[node] {
-        nbr := topo.IndicesNode[node][nbrIdx]
-        nbrLink := topo.NodeToPortMap[nbr][node]
-        nbrNhop := topo.NextHop[dest][nbr]
-        nbrNhopLink := topo.NodeToPortMap[nbr][nbrNhop]
-        export := topo.Exports[nbr][nbrLink][nbrNhopLink]
-        if export * nbrNhop != 0 {
-            return nbr
-        }
-    }
-    return 0
-}
-
-func (topo *Topology) ComputeNextHops (dest int64) {
+func (topo *Topology) ComputeNextHopsWithFail (nhop map[int64] int64, src int64, disallow int64) (map[int64] int64) {
     converged := false
     for !converged {
         nhopTable := make(map[int64] int64, topo.Nodes)
         converged = true
         for node := range topo.AdjacencyMatrix {
-            nhopTable[node] = topo.GetCurrentNextHop(node, dest)
-            converged = converged && (nhopTable[node] == topo.NextHop[dest][node])
+            if node == src {
+                nhopTable[node] = topo.GetCurrentNextHopWithFail(node,  nhop, disallow)
+            } else {
+                nhopTable[node] = topo.GetCurrentNextHop(node, nhop)
+            }
+            converged = converged && (nhopTable[node] == nhop[node])
         }
-        topo.NextHop[dest] = nhopTable
+        nhop = nhopTable
     }
+    return nhop
 }
+
+func (topo *Topology) GetCurrentNextHop (node int64, nhop map[int64] int64) (int64){
+    // Go through neighbors in preference order
+    for nbrIdx := range topo.IndicesNode[node] {
+        nbr := topo.IndicesNode[node][nbrIdx]
+        nbrLink := topo.NodeToPortMap[nbr][node]
+        nbrNhop := nhop[nbr]
+        nbrNhopLink := topo.NodeToPortMap[nbr][nbrNhop]
+        export := topo.Exports[nbr][nbrLink][nbrNhopLink]
+        if export * nbrNhop != 0 {
+            return nbr
+        }
+    }
+    return 0
+}
+
+func (topo *Topology) ComputeNextHopsInternal (nhop map[int64] int64) (map[int64] int64) {
+    converged := false
+    for !converged {
+        nhopTable := make(map[int64] int64, topo.Nodes)
+        converged = true
+        for node := range topo.AdjacencyMatrix {
+            nhopTable[node] = topo.GetCurrentNextHop(node, nhop)
+            converged = converged && (nhopTable[node] == nhop[node])
+        }
+        nhop = nhopTable
+    }
+    return nhop
+}
+
+func (topo *Topology) ComputeNextHops (dest int64) {
+    topo.NextHop[dest] = topo.ComputeNextHopsInternal (topo.NextHop[dest])
+}
+
 func (topo *Topology) PrintNextHop () {
     for i := range topo.NextHop {
         fmt.Printf("%d: ", i)
@@ -191,6 +216,19 @@ func (topo *Topology) PrintNextHop () {
         fmt.Printf("\n")
     }
 }
+
+type int64arr []int64
+func (a int64arr) Len() int { 
+    return len(a) 
+}
+
+func (a int64arr) Swap(i, j int) { 
+    a[i], a[j] = a[j], a[i] 
+}
+func (a int64arr) Less(i, j int) bool {
+    return a[i] < a[j] 
+}
+
 
 func main() {
     topoFile := flag.String("topology", "", "Topology (json file) to use")
@@ -219,8 +257,21 @@ func main() {
         fmt.Printf("Error opening file %v\n", err)
         os.Exit(1)
     }
-    bufOf.WriteString("Node0 Node1: Unaffected Delivered Instaloop Longloop\n")
-    pbNodes := progress.StartNew(len(topo.AdjacencyMatrix))
+    dests := int64arr(make([]int64, topo.Nodes))
+    count = 0
+    for node := range topo.AdjacencyMatrix {
+        dests[count] = node
+        count++
+    }
+    sort.Sort(dests)
+    bufOf.WriteString("Node0 Node1 ")
+    for didx := range dests {
+        bufOf.WriteString(fmt.Sprintf("%d ", dests[didx]))
+    }
+    bufOf.WriteString("\n")
+    bufOf.Flush()
+    count = 0
+    fmt.Printf("Starting the main course\n")
     for node0 := range topo.AdjacencyMatrix {
         for idx := range topo.AdjacencyMatrix[node0] {
             node1 := topo.AdjacencyMatrix[node0][idx]
@@ -228,10 +279,15 @@ func main() {
                 continue
             }
             out := topo.LinkFailEffect(node0, node1)
-            bufOf.WriteString(fmt.Sprintf("%d %d: %d %d %d %d\n", node0,node1, out[0], out[1], out[2], out[3]))
+            bufOf.WriteString(fmt.Sprintf("%d %d", node0, node1))
+            for didx := range dests {
+                bufOf.WriteString(fmt.Sprintf("%d ", out[dests[didx]]))
+            }
+            bufOf.WriteString("\n")
         }
-        pbNodes.Increment()
+        count++
+        fmt.Printf("Done with node %d/%d\n", count, topo.Nodes)
+        bufOf.Flush()
     }
-    pbNodes.FinishPrint("Done")
 }
 

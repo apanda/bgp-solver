@@ -278,7 +278,7 @@ func main() {
         count ++
         fmt.Printf("Done %d/%d\n", count, len(topo.AdjacencyMatrix))
     }
-    topo.PrintNextHop()
+    //topo.PrintNextHop()
     of, err := os.Create(*outFile)
     defer of.Close()
     bufOf := bufio.NewWriter(of)

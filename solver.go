@@ -100,7 +100,7 @@ func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) (map[int64] int)
             continue
         }
         if topo.NextHop[dest][node0] != node1 { //Case 1
-             fmt.Printf("Failed %d %d, path to %d unaffected\n", node0, node1, dest)
+             //fmt.Printf("Failed %d %d, path to %d unaffected\n", node0, node1, dest)
             node0Result[dest] = 1
         } else {
             fmt.Printf("Computing next hops\n")
@@ -293,9 +293,9 @@ func main() {
             }
             chFail[node1] = make(chan map[int64] int, 1)
             go func(n0 int64, n1 int64) {
-                fmt.Printf("Starting computation\n")
+                fmt.Printf("Starting computation %d %d\n", n0, n1)
                 out := topo.LinkFailEffect(node0, node1)
-                fmt.Printf("Computed something\n")
+                fmt.Printf("Computed failure of %d %d\n", n0, n1)
                 chFail[n1] <- out
             } (node0, node1)
         }

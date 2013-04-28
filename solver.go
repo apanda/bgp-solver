@@ -135,11 +135,7 @@ func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) (map[int64] int)
                     path[pathLength] = current
                     pathLength += 1
                     if visited[current] {
-                        fmt.Printf("Hmm loop\nDest: %d\nPath: ", dest)
-                        for idx := 0; idx < pathLength; idx++ {
-                            fmt.Printf("%d ", path[idx])
-                        }
-                        fmt.Printf("\n")
+                        break
                     }
                     visited[current] = true
                 }

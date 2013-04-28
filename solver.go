@@ -192,14 +192,14 @@ func (topo *Topology) GetCurrentNextHop (node int64, nhop map[int64] int64) (int
 
 func (topo *Topology) ComputeNextHopsInternal (nhop map[int64] int64) (map[int64] int64) {
     converged := false
+    nhopTable := make(map[int64] int64, topo.Nodes)
     for !converged {
-        nhopTable := make(map[int64] int64, topo.Nodes)
         converged = true
         for node := range topo.AdjacencyMatrix {
             nhopTable[node] = topo.GetCurrentNextHop(node, nhop)
             converged = converged && (nhopTable[node] == nhop[node])
         }
-        nhop = nhopTable
+        nhop, nhopTable = nhopTable, nhop
     }
     return nhop
 }

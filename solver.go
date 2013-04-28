@@ -159,9 +159,11 @@ func (topo *Topology) GetCurrentNextHopWithFail (node int64, nhop map[int64] int
 
 func (topo *Topology) ComputeNextHopsWithFail (nhop map[int64] int64, src int64, disallow int64) (map[int64] int64) {
     converged := false
+    steps := 0
     for !converged {
         nhopTable := make(map[int64] int64, topo.Nodes)
         converged = true
+        steps++
         for node := range topo.AdjacencyMatrix {
             if node == src {
                 nhopTable[node] = topo.GetCurrentNextHopWithFail(node,  nhop, disallow)
@@ -172,6 +174,7 @@ func (topo *Topology) ComputeNextHopsWithFail (nhop map[int64] int64, src int64,
         }
         nhop = nhopTable
     }
+    fmt.Printf("Convergence after failurer took %d steps\n")
     return nhop
 }
 
@@ -288,6 +291,7 @@ func main() {
             }
             chFail[node1] = make(chan map[int64] int, 1)
             go func(n0 int64, n1 int64) {
+                fmt.Printf("Starting computation\n")
                 out := topo.LinkFailEffect(node0, node1)
                 fmt.Printf("Computed something\n")
                 chFail[n1] <- out

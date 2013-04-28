@@ -203,7 +203,6 @@ func (topo *Topology) ComputeNextHopsWithFail (nhop []int64, src int64, disallow
             break
         }
     }
-    fmt.Printf("Convergence after failurer took %d steps\n", steps)
     return nhop
 }
 
@@ -334,9 +333,7 @@ func main() {
             }
             chFail[node0][node1] = make(chan map[int64] int, 1)
             go func(n0 int64, n1 int64, ch chan map[int64] int) {
-                fmt.Printf("Starting computation %d %d\n", n0, n1)
                 out := topo.LinkFailEffect(node0, node1)
-                fmt.Printf("Computed failure of %d %d\n", n0, n1)
                 ch <- out
             } (node0, node1, chFail[node0][node1])
         }

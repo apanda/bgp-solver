@@ -9,6 +9,7 @@ import (
         "runtime"
          topology "github.com/apanda/smpc/topology"
          "runtime/pprof"
+         "sync"
         )
 type Topology struct {
     Nodes int
@@ -197,7 +198,7 @@ func (topo *Topology) ComputeNextHopsWithFail (nhop []int64, src int64, disallow
         }
         nhop = nhopTable
         if steps >= 10 && steps % 10 == 0 {
-            fmt.Printf("No converges in %d steps\n", steps)
+            fmt.Printf("No convergence in %d steps\n", steps)
         }
         if steps >= 12 {
             break
@@ -259,6 +260,17 @@ func (a int64arr) Less(i, j int) bool {
     return a[i] < a[j] 
 }
 
+func SafeWriteString (bufOf *bufio.Writer, mutex *sync.Mutex, dests []int64, out map[int64] int, node0 int64, node1 int64) {
+    mutex.Lock()
+    defer mutex.Unlock()
+    fmt.Printf("Writing %d %d %d\n", node0, node1, len(out))
+    bufOf.WriteString(fmt.Sprintf("%d %d", node0, node1))
+    for didx := range dests {
+        bufOf.WriteString(fmt.Sprintf("%d ", out[dests[didx]]))
+    }
+    bufOf.WriteString("\n")
+    bufOf.Flush()
+}
 
 func main() {
     topoFile := flag.String("topology", "", "Topology (json file) to use")
@@ -314,12 +326,15 @@ func main() {
         count++
     }
     sort.Sort(dests)
+    bufLock := &sync.Mutex{}
+    bufLock.Lock()
     bufOf.WriteString("Node0 Node1 ")
     for didx := range dests {
         bufOf.WriteString(fmt.Sprintf("%d ", dests[didx]))
     }
     bufOf.WriteString("\n")
     bufOf.Flush()
+    bufLock.Unlock()
     count = 0
     fmt.Printf("Starting the main course\n")
     chFail := make(map[int64] map[int64] chan map[int64] int, topo.Nodes)
@@ -334,22 +349,19 @@ func main() {
             chFail[node0][node1] = make(chan map[int64] int, 1)
             go func(n0 int64, n1 int64, ch chan map[int64] int) {
                 out := topo.LinkFailEffect(node0, node1)
+                SafeWriteString(bufOf, bufLock, dests, out, n0, n1)
                 ch <- out
             } (node0, node1, chFail[node0][node1])
         }
     }
+    total_links := 0
     for node0 := range chFail { 
         for node1 := range chFail[node0] {
             fmt.Printf("Waiting for %d %d\n", node0, node1)
-            out := <- chFail[node0][node1]
-            bufOf.WriteString(fmt.Sprintf("%d %d", node0, node1))
-            for didx := range dests {
-                bufOf.WriteString(fmt.Sprintf("%d ", out[dests[didx]]))
-            }
-            bufOf.WriteString("\n")
+            <- chFail[node0][node1]
+            total_links++
         }
         count++
         fmt.Printf("Done with node %d/%d\n", count, topo.Nodes)
-        bufOf.Flush()
     }
 }

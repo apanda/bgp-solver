@@ -337,20 +337,20 @@ func main() {
     bufLock.Unlock()
     count = 0
     fmt.Printf("Starting the main course\n")
-    chFail := make(map[int64] map[int64] chan map[int64] int, topo.Nodes)
+    chFail := make(map[int64] map[int64] chan bool, topo.Nodes)
     for node0Idx := range topo.NodeList {
         node0 := topo.NodeList[node0Idx]
-        chFail[node0] = make(map[int64] chan map[int64] int, len(topo.AdjacencyMatrix[node0]))
+        chFail[node0] = make(map[int64] chan bool, len(topo.AdjacencyMatrix[node0]))
         for idx := range topo.AdjacencyMatrix[node0] {
             node1 := topo.AdjacencyMatrix[node0][idx]
             if node1 == node0 {
                 continue
             }
-            chFail[node0][node1] = make(chan map[int64] int, 1)
-            go func(n0 int64, n1 int64, ch chan map[int64] int) {
+            chFail[node0][node1] = make(chan bool, 1)
+            go func(n0 int64, n1 int64, ch chan bool) {
                 out := topo.LinkFailEffect(node0, node1)
                 SafeWriteString(bufOf, bufLock, dests, out, n0, n1)
-                ch <- out
+                ch <- true
             } (node0, node1, chFail[node0][node1])
         }
     }

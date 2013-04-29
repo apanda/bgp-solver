@@ -198,7 +198,6 @@ func (topo *Topology) ComputeNextHopsWithFail (nhop []int64, src int64, disallow
         }
         nhop, nhopTable = nhopTable, nhop
         if steps >= 12  {
-            fmt.Printf("No convergence in %d steps\n", steps)
             return nhop
         }
     }
@@ -234,7 +233,6 @@ func (topo *Topology) ComputeNextHopsInternal (nhop []int64) ([]int64) {
         }
         nhop, nhopTable = nhopTable, nhop
         if steps >= 12  {
-            fmt.Printf("No convergence in %d steps\n", steps)
             return nhop
         }
     }

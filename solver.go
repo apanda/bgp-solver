@@ -183,8 +183,8 @@ func (topo *Topology) GetCurrentNextHopWithFail (node int64, nhop []int64, disal
 func (topo *Topology) ComputeNextHopsWithFail (nhop []int64, src int64, disallow int64) ([]int64) {
     converged := false
     steps := 0
+    nhopTable := make([]int64, topo.Nodes + 1)
     for !converged {
-        nhopTable := make([]int64, topo.Nodes + 1)
         converged = true
         steps++
         for nodeIdx := range topo.NodeList {
@@ -196,12 +196,10 @@ func (topo *Topology) ComputeNextHopsWithFail (nhop []int64, src int64, disallow
             }
             converged = converged && (nhopTable[node] == nhop[node])
         }
-        nhop = nhopTable
-        if steps >= 10 && steps % 10 == 0 {
+        nhop, nhopTable = nhopTable, nhop
+        if steps >= 10  {
             fmt.Printf("No convergence in %d steps\n", steps)
-        }
-        if steps >= 12 {
-            break
+            return nhop
         }
     }
     return nhop
@@ -225,14 +223,20 @@ func (topo *Topology) GetCurrentNextHop (node int64, nhop []int64) (int64){
 func (topo *Topology) ComputeNextHopsInternal (nhop []int64) ([]int64) {
     converged := false
     nhopTable := make([]int64, topo.Nodes + 1)
+    steps := 0
     for !converged {
         converged = true
+        steps++
         for nodeIdx := range topo.NodeList {
             node := topo.NodeList[nodeIdx]
             nhopTable[node] = topo.GetCurrentNextHop(node, nhop)
             converged = converged && (nhopTable[node] == nhop[node])
         }
         nhop, nhopTable = nhopTable, nhop
+        if steps >= 10  {
+            fmt.Printf("No convergence in %d steps\n", steps)
+            return nhop
+        }
     }
     return nhop
 }

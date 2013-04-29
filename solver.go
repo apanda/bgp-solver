@@ -138,7 +138,8 @@ func (topo *Topology) LinkFailEffect (node0 int64, node1 int64) (map[int64] int)
                     current = topo.NextHop[dest][current]
                   //  fmt.Printf("Simulation step node %d dest %d current %d\n", node0, dest, current)
                     if prev == current {
-                        fmt.Printf("Weird loop, dying %d %d\n", prev, dest)
+                        fmt.Printf("Weird loop, dying %d %d %d %d\n", prev, dest, node0, node1)
+                        panic("Breaking")
                     }
                     
                     path[pathLength] = current
@@ -197,7 +198,8 @@ func (topo *Topology) ComputeNextHopsWithFail (nhop []int64, src int64, disallow
             converged = converged && (nhopTable[node] == nhop[node])
         }
         nhop, nhopTable = nhopTable, nhop
-        if steps >= 30  {
+        if steps >= 100  {
+            fmt.Printf("No convergence in %d steps\n")
             return nhop
         }
     }
@@ -232,7 +234,8 @@ func (topo *Topology) ComputeNextHopsInternal (nhop []int64) ([]int64) {
             converged = converged && (nhopTable[node] == nhop[node])
         }
         nhop, nhopTable = nhopTable, nhop
-        if steps >= 30  {
+        if steps >= 100  {
+            fmt.Printf("No convergence in %d steps\n")
             return nhop
         }
     }
